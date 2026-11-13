@@ -29,9 +29,18 @@ const LABEL = Object.fromEntries(GROUPS.flatMap(([g, s]) => s.map(([id, l]) => [
 let hasChats = false;
 const CHATS = ['chat', 'build', 'chat-history', 'plan-done'];
 const home = (withChats) => () => hasChats ? withChats : 'chat-blank';
+
+// Build / Preview is a mode of the top bar, not a screen: switching it keeps the right panel as it is.
+// Each Figma frame was drawn in one mode; when the live mode differs, the left part of the top bar
+// is painted from the matching reference frame (build.jpg / preview.jpg — identical everywhere else).
+let mode = 'build';
+const BAKED = { build: 'build', fullscreen: 'build', 'adjust-global': 'build', 'adjust-object': 'build' };
+const NO_BAR = new Set(['plan-open', 'plan-check', 'plan-done', 'create-mywana-modal']); // dimmed modals
+const bakedMode = id => BAKED[id] || 'preview';
+let lastPanel = 'chat-blank';
 const TOP = [
-  { r: [60, 9, 100, 26], go: home('build'), label: 'Build' },
-  { r: [160, 9, 100, 26], go: 'preview', label: 'Preview' },
+  { r: [60, 9, 100, 26], mode: 'build', label: 'Build' },
+  { r: [160, 9, 100, 26], mode: 'preview', label: 'Preview' },
   { r: [1886, 8, 26, 26], go: 'fullscreen', label: 'Hide panel' },
 ];
 const TABS = [
@@ -57,7 +66,7 @@ const T = (x, y, h = 56) => [x, y, 120, h];
 const HS = {
   'build': [...BASE, ...CHAT_HEAD],
   'preview': [...BASE, ...CHAT_HEAD],
-  'fullscreen': [TOP[0], TOP[1], { r: [1886, 8, 26, 26], go: home('build'), label: 'Show panel' }],
+  'fullscreen': [TOP[0], TOP[1], { r: [1886, 8, 26, 26], go: () => lastPanel, label: 'Show panel' }],
   'chat-blank': [...BASE, ...CHAT_HEAD],
   'chat': [...BASE, ...CHAT_HEAD],
   'chat-history': [
@@ -225,6 +234,8 @@ addEventListener('resize', fit);
 function go(id, nextCtx = null, push = true) {
   if (!HS[id]) id = 'chat-blank';
   if (CHATS.includes(id)) hasChats = true;
+  if (id === 'build' || id === 'preview') mode = bakedMode(id);
+  if (id !== 'fullscreen' && !NO_BAR.has(id)) lastPanel = id;
   target = id;
   if (id !== current) {
     const im = preload(id);
@@ -266,6 +277,13 @@ function render() {
   const hs = HS[id] || [];
   hs.filter(h => (h.cls || '').includes('backdrop')).forEach(addHot);
 
+  if (!NO_BAR.has(id) && bakedMode(id) !== mode) {
+    const bar = box(document.createElement('div'), [0, 0, 1420, 44]);
+    bar.className = 'patch';
+    Object.assign(bar.style, { background: `url("${src(mode)}") 0 0 / ${W}px ${H}px no-repeat` });
+    layer.appendChild(bar);
+  }
+
   if (id === 'chat-blank') renderGuide();
   if (COMPOSER.has(id)) renderComposer(id);
 
@@ -281,6 +299,7 @@ function addHot(h) {
   b.addEventListener('click', e => {
     e.stopPropagation();
     if (h.act === 'regen') return regen();
+    if (h.mode) { mode = h.mode; return render(); }
     const to = typeof h.go === 'function' ? h.go() : h.go;
     if (to) go(to, h.ctx || null); else flash();
   });

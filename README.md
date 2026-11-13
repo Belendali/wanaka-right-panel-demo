@@ -4,7 +4,8 @@ Clickable prototype of the Wanaka Studio editor right panel (Figma: Wanaka Studi
 
 **Live:** https://belendali.github.io/wanaka-right-panel-demo/
 
-- Opens on a single New Chat; **+** adds the other chats
+- Opens in Build mode on a single New Chat; **+** adds the other chats
+- Build / Preview only switch the top bar — the right panel stays where it is
 - Tabs: Chat / Scene / Adjust / Tools
 - Adjust: nothing selected → game settings; click the fish skeleton in the viewport to select it and adjust its properties, click empty space to deselect
 - Tools → every sub-page (Create, Assets, Gameplay, World, Look & Camera), with Use in Chat
