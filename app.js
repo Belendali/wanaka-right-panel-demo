@@ -8,11 +8,11 @@ const W = 1920, H = 1080;
 
 // ---------- screens ----------
 const GROUPS = [
-  ['Build & Preview', [['build', 'Build'], ['preview', 'Preview'], ['fullscreen', 'Full screen']]],
   ['Chat', [['chat-blank', 'New chat'], ['chat', 'Chat'], ['chat-history', 'Chat history']]],
+  ['Build & Preview', [['build', 'Build'], ['preview', 'Preview'], ['fullscreen', 'Full screen']]],
   ['Plan mode', [['plan-open', 'Plan open'], ['plan-check', 'Plan check'], ['plan-done', 'Plan done']]],
   ['Scene', [['scene-objects', 'Objects'], ['scene-scenes', 'Scenes'], ['scene-menu', 'Scene menu'], ['object-menu', 'Object menu']]],
-  ['Adjust', [['adjust-global', 'Global'], ['adjust-object', 'Object']]],
+  ['Adjust', [['adjust-global', 'Nothing selected'], ['adjust-object', 'Object selected']]],
   ['Tools', [['tools-home', 'Tools home'], ['tools-seasons', 'Seasons'], ['tools-useinchat', 'Use in Chat']]],
   ['Tools · Create', [['create-character', 'Character'], ['create-mywana', 'My Wana'], ['create-mywana-modal', 'Create your Wana'], ['create-3d', '3D'], ['create-2d', '2D & UI'], ['create-audio', 'Audio'], ['create-animation', 'Animation']]],
   ['Tools · Assets', [['assets-store', 'Store'], ['assets-my', 'My assets'], ['assets-project', 'Project files'], ['assets-prefabs', 'Prefabs']]],
@@ -24,19 +24,24 @@ const ORDER = GROUPS.flatMap(([, s]) => s.map(([id]) => id));
 const LABEL = Object.fromEntries(GROUPS.flatMap(([g, s]) => s.map(([id, l]) => [id, `${g} · ${l}`])));
 
 // ---------- shared hotspots ----------
+// The demo opens on a single New Chat. The other chats (Fish Game, Create audio, …) only exist
+// after "+" is pressed or a plan is built; until then Build / Chat return to the New Chat.
+let hasChats = false;
+const CHATS = ['chat', 'build', 'chat-history', 'plan-done'];
+const home = (withChats) => () => hasChats ? withChats : 'chat-blank';
 const TOP = [
-  { r: [60, 9, 100, 26], go: 'build', label: 'Build' },
+  { r: [60, 9, 100, 26], go: home('build'), label: 'Build' },
   { r: [160, 9, 100, 26], go: 'preview', label: 'Preview' },
   { r: [1886, 8, 26, 26], go: 'fullscreen', label: 'Hide panel' },
 ];
 const TABS = [
-  { r: [1534, 58, 93, 26], go: 'chat', label: 'Chat tab' },
+  { r: [1534, 58, 93, 26], go: home('chat'), label: 'Chat tab' },
   { r: [1627, 58, 93, 26], go: 'scene-objects', label: 'Scene tab' },
   { r: [1720, 58, 93, 26], go: 'adjust-global', label: 'Adjust tab' },
   { r: [1813, 58, 93, 26], go: 'tools-home', label: 'Tools tab' },
 ];
 const CHAT_HEAD = [
-  { r: [1855, 115, 24, 24], go: 'chat-blank', label: 'New chat' },
+  { r: [1855, 115, 24, 24], go: () => current === 'chat-blank' ? 'chat' : 'chat-blank', label: 'New chat' },
   { r: [1887, 115, 24, 24], go: 'chat-history', label: 'Chat history' },
 ];
 const BACK = { r: [1532, 98, 230, 40], go: 'tools-home', label: 'Back to Tools', cls: 'flat' };
@@ -52,7 +57,7 @@ const T = (x, y, h = 56) => [x, y, 120, h];
 const HS = {
   'build': [...BASE, ...CHAT_HEAD],
   'preview': [...BASE, ...CHAT_HEAD],
-  'fullscreen': [TOP[0], TOP[1], { r: [1886, 8, 26, 26], go: 'build', label: 'Show panel' }],
+  'fullscreen': [TOP[0], TOP[1], { r: [1886, 8, 26, 26], go: home('build'), label: 'Show panel' }],
   'chat-blank': [...BASE, ...CHAT_HEAD],
   'chat': [...BASE, ...CHAT_HEAD],
   'chat-history': [
@@ -85,8 +90,14 @@ const HS = {
     { r: [1594, 206, 192, 136], go: 'scene-scenes', label: 'Menu item' }],
   'object-menu': [{ r: [0, 0, W, H], go: 'scene-objects', cls: 'backdrop' }, ...BASE,
     { r: [1674, 380, 190, 228], go: 'scene-objects', label: 'Menu item' }],
-  'adjust-global': [...BASE],
-  'adjust-object': [...BASE],
+  // Adjust: nothing selected shows global game settings; click the object in the viewport to select it
+  // and adjust its own properties; click empty viewport to deselect.
+  'adjust-global': [...BASE, { r: [716, 530, 116, 66], go: 'adjust-object', label: 'Select object' }],
+  'adjust-object': [
+    { r: [12, 56, 1508, 1012], go: 'adjust-global', cls: 'backdrop', label: 'Deselect' },
+    ...BASE,
+    { r: [656, 476, 304, 176], go: 'adjust-object', cls: 'flat', label: 'Selected object' },
+  ],
   'tools-home': [
     ...BASE,
     { r: T(1532, 174), go: 'create-character', label: 'Character' },
@@ -189,12 +200,14 @@ const layer = document.getElementById('layer');
 const shots = [document.getElementById('shotA'), document.getElementById('shotB')];
 let front = 0;
 let current = null;
+let target = null;       // screen whose image should end up visible
 let ctx = null;          // context passed by the hotspot that opened this screen
 let guideOpen = null;    // which guide item is expanded on New chat
 let draft = null;        // composer content to restore when re-rendering
 let timer = null;
 
-const src = id => `img/${id}.jpg`;
+const VER = 2;
+const src = id => `img/${id}.jpg?v=${VER}`;
 const cache = {};
 function preload(id) {
   if (!cache[id]) { const im = new Image(); im.decoding = 'async'; im.src = src(id); cache[id] = im; }
@@ -210,10 +223,13 @@ addEventListener('resize', fit);
 
 // ---------- navigation ----------
 function go(id, nextCtx = null, push = true) {
-  if (!HS[id]) id = 'build';
+  if (!HS[id]) id = 'chat-blank';
+  if (CHATS.includes(id)) hasChats = true;
+  target = id;
   if (id !== current) {
     const im = preload(id);
     const show = () => {
+      if (target !== id) return;           // a later click already moved on
       const back = shots[1 - front];
       back.src = im.src;
       back.classList.add('on');
@@ -231,10 +247,10 @@ function go(id, nextCtx = null, push = true) {
   clearTimeout(timer);
   if (id === 'plan-open') timer = setTimeout(() => current === 'plan-open' && go('plan-check'), 2600);
   // warm neighbours
-  (HS[id] || []).forEach(h => h.go && preload(h.go));
+  (HS[id] || []).forEach(h => h.go && preload(typeof h.go === 'function' ? h.go() : h.go));
 }
 
-addEventListener('popstate', () => go(location.hash.slice(1) || 'build', null, false));
+addEventListener('popstate', () => go(location.hash.slice(1) || 'chat-blank', null, false));
 
 // ---------- render overlays ----------
 function box(el, [x, y, w, h]) {
@@ -265,7 +281,8 @@ function addHot(h) {
   b.addEventListener('click', e => {
     e.stopPropagation();
     if (h.act === 'regen') return regen();
-    if (h.go) go(h.go, h.ctx || null); else flash();
+    const to = typeof h.go === 'function' ? h.go() : h.go;
+    if (to) go(to, h.ctx || null); else flash();
   });
   if (h.label && /menu/i.test(h.label)) b.addEventListener('contextmenu', e => { e.preventDefault(); go(h.go); });
   layer.appendChild(b);
@@ -438,12 +455,12 @@ addEventListener('keydown', e => {
   else if (e.key === 'h' || e.key === 'H') flash();
   else if (e.key === 'Escape') {
     if (!drawer.hidden) return toggleDrawer(false);
-    const up = { 'chat-history': 'chat', 'scene-menu': 'scene-scenes', 'object-menu': 'scene-objects', 'create-mywana-modal': 'create-mywana', 'plan-check': 'chat-blank' }[current];
+    const up = { 'chat-history': 'chat', 'scene-menu': 'scene-scenes', 'object-menu': 'scene-objects', 'create-mywana-modal': 'create-mywana', 'plan-check': 'chat-blank', 'adjust-object': 'adjust-global' }[current];
     if (up) go(up);
   }
 });
 
 // ---------- boot ----------
 fit();
-go(location.hash.slice(1) || 'build', null, false);
+go(location.hash.slice(1) || 'chat-blank', null, false);
 setTimeout(() => ORDER.forEach(preload), 800);
