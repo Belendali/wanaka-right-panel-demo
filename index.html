@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wanaka Studio · Right Panel Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app">
+  <div id="stage" aria-live="polite">
+    <img id="shotA" class="shot on" alt="">
+    <img id="shotB" class="shot" alt="">
+    <div id="layer"></div>
+  </div>
+</main>
+
+<button id="navBtn" type="button" aria-expanded="false" aria-controls="drawer">
+  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 3.5h10M2 7h10M2 10.5h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+  <span>Screens</span><b id="navCount"></b>
+</button>
+<aside id="drawer" hidden>
+  <header>
+    <strong>Wanaka Studio · Right panel</strong>
+    <span>Figma section 1112 · click anything that looks clickable</span>
+  </header>
+  <nav id="list"></nav>
+  <footer>
+    <span><kbd>←</kbd><kbd>→</kbd> step through</span>
+    <span><kbd>S</kbd> screens</span>
+    <span><kbd>H</kbd> show hotspots</span>
+  </footer>
+</aside>
+
+<script src="app.js"></script>
+</body>
+</html>
